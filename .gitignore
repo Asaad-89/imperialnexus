@@ -27,3 +27,7 @@ build/
 
 # Cache
 .cache/
+
+# Server secrets (API keys live only on Hostinger, never in this public repo)
+config.php
+secrets.php
