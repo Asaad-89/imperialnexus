@@ -13,10 +13,12 @@ Partners, Clients, Careers, Contact, Account portal.
 - `imperial-theme.js` adds the theme layer.
 - Client-side hash routing (`#/home`, `#/services`, ...).
 - Designs and accounts are stored in the visitor's browser (`localStorage`).
+- `api/analyze.php` proxies the Network Designer's AI analysis to the Anthropic API. It owns
+  the system prompt, checks the request comes from this site, and rate-limits per visitor.
 
 ## Rules
 - The repo is PUBLIC. Never commit API keys, passwords or tokens. Server secrets go in
-  `config.php` on Hostinger only (it is git-ignored).
+  `config.php` on Hostinger, one level above `public_html` (outside the deploy), never in git.
 - Every visible string must exist in both English and Arabic (use the existing `tx(en, ar)`
   helper). Check layouts in RTL (Arabic) as well as LTR.
 - Never insert untrusted text (user input, AI output) with `innerHTML` without escaping.
