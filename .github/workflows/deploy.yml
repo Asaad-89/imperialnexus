@@ -26,7 +26,7 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftps
           port: 21
-          server-dir: public_html/
+          server-dir: ./   # the FTP account already opens inside public_html
           exclude: |
             **/.git*
             **/.git*/**
