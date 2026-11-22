@@ -2385,6 +2385,10 @@ html[lang="ar"] .rot-words{font-style:normal;}
     el.classList.add(ok ? "ok" : "err");
   }
 
+  // Both language shells are rendered at once, so label each one in its own
+  // language instead of the currently selected one.
+  function trFor(shell, en, ar){ return shell.getAttribute("data-lang") === "ar" ? ar : en; }
+
   function refreshAuthUI(){
     var session = lsGet(SESSION_KEY);
     document.querySelectorAll('.app-shell').forEach(function(shell){
@@ -2396,8 +2400,8 @@ html[lang="ar"] .rot-words{font-style:normal;}
         signed.removeAttribute("hidden");
         var greet = signed.querySelector("[data-auth-greeting]");
         if(greet){
-          var role = session.acctype === "contractor" ? tr("Contractor","مقاول") : tr("End Client","عميل نهائي");
-          greet.textContent = tr("Signed in as ", "مسجّل الدخول باسم ") + session.name + " · " + role;
+          var role = session.acctype === "contractor" ? trFor(shell, "Contractor","مقاول") : trFor(shell, "End Client","عميل نهائي");
+          greet.textContent = trFor(shell, "Signed in as ", "مسجّل الدخول باسم ") + session.name + " · " + role;
         }
       } else {
         signed.setAttribute("hidden","");
@@ -2405,7 +2409,7 @@ html[lang="ar"] .rot-words{font-style:normal;}
       }
       // account nav label reflects state
       shell.querySelectorAll('.nav-account').forEach(function(a){
-        a.textContent = session ? tr("My Account","حسابي") : tr("Account","الحساب");
+        a.textContent = session ? trFor(shell, "My Account","حسابي") : trFor(shell, "Account","الحساب");
       });
     });
   }
