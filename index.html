@@ -3132,17 +3132,7 @@ window.INX_CATEGORIES = [{"id": "cabinet", "en": "Rack / Cabinet", "ar": "الك
       return "[" + c.level.toUpperCase() + "] " + c.text;
     }).join("\n") : "(no automated findings — fewer than 2 relevant items selected)";
 
-    var sysPrompt = "You are a senior network engineer at Imperial Nexus, a premier IT solutions provider in Saudi Arabia. " +
-      "You specialize in evaluating network designs for compatibility, performance, and best practices. " +
-      "Imperial Nexus's own rule-based compatibility engine has already scanned this exact selection and produced the findings below — " +
-      "treat them as verified ground truth, do not contradict them, and do not repeat them verbatim. Your job is to: " +
-      "1) Briefly acknowledge the engine's findings in your own words " +
-      "2) Add deeper engineering insight the automated engine cannot catch — e.g. brand-specific interoperability quirks, PoE class/standard nuances (802.3af/at/bt), firmware or management-plane considerations, uplink/transceiver compatibility across the specific brands selected, cabling category needs, redundancy and future scalability " +
-      "3) Give concrete, prioritized recommendations to fix any ERR/WARN items and to improve the design overall " +
-      "4) A brief professional summary. " +
-      "Be concise but thorough. Use simple HTML formatting (h5, p tags, and classes: ai-ok for good, ai-warn for warnings, ai-err for errors). " +
-      (language === "ar" ? "IMPORTANT: Respond entirely in Arabic." : "Respond in English.");
-
+    // The system prompt lives on the server (api/analyze.php).
     var userPrompt = "Equipment selection:\n\n" + itemList +
       "\n\nAutomated compatibility engine findings (already computed, treat as verified):\n" + engineSummary +
       "\n\nPlease build on these findings with deeper analysis covering:\n" +
@@ -3153,7 +3143,28 @@ window.INX_CATEGORIES = [{"id": "cabinet", "en": "Rack / Cabinet", "ar": "الك
       "- Redundancy, scalability, and any single points of failure\n" +
       "- General best practices for a design like this";
 
-    return { system: sysPrompt, user: userPrompt };
+    return { user: userPrompt };
+  }
+
+  // AI output is HTML; keep only simple formatting so nothing executable is inserted.
+  function sanitizeAIHtml(html){
+    var allowed = { H4:1, H5:1, H6:1, P:1, UL:1, OL:1, LI:1, STRONG:1, B:1, EM:1, I:1, BR:1, DIV:1, SPAN:1 };
+    var okClass = { "ai-ok":1, "ai-warn":1, "ai-err":1 };
+    var src = new DOMParser().parseFromString("<body>" + html + "</body>", "text/html").body;
+    var frag = document.createDocumentFragment();
+    (function copy(from, to){
+      Array.prototype.forEach.call(from.childNodes, function(n){
+        if(n.nodeType === 3){ to.appendChild(document.createTextNode(n.nodeValue)); return; }
+        if(n.nodeType !== 1) return;
+        if(/^(SCRIPT|STYLE|IFRAME|OBJECT|EMBED|TEMPLATE|NOSCRIPT|SVG|MATH)$/.test(n.tagName)) return;
+        if(!allowed[n.tagName]){ copy(n, to); return; }
+        var el = document.createElement(n.tagName.toLowerCase());
+        (n.getAttribute("class") || "").split(/\s+/).forEach(function(c){ if(okClass[c]) el.classList.add(c); });
+        copy(n, el);
+        to.appendChild(el);
+      });
+    })(src, frag);
+    return frag;
   }
 
   async function runAIAnalysis(shell){
@@ -3176,37 +3187,38 @@ window.INX_CATEGORIES = [{"id": "cabinet", "en": "Rack / Cabinet", "ar": "الك
 
     var prompts = buildPrompt(items, lang());
 
+    function aiMessage(cls, en, ar){
+      outputEl.innerHTML = '<div class="ai-result"><p class="' + cls + '">' + tx(en, ar) + '</p></div>';
+    }
+
     try {
-      var response = await fetch("https://api.anthropic.com/v1/messages", {
+      var response = await fetch("api/analyze.php", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 1000,
-          system: prompts.system,
-          messages: [{ role: "user", content: prompts.user }]
-        })
+        body: JSON.stringify({ lang: lang(), user: prompts.user })
       });
+      var data = {};
+      try { data = await response.json(); } catch(e){}
 
-      var data = await response.json();
-      var text = "";
-      if(data.content && data.content.length > 0){
-        data.content.forEach(function(block){
-          if(block.type === "text") text += block.text;
-        });
-      }
-
-      if(text){
-        outputEl.innerHTML = '<div class="ai-result">' + text + '</div>';
+      if(response.ok && data.text){
+        outputEl.innerHTML = "";
+        var result = document.createElement("div");
+        result.className = "ai-result";
+        result.appendChild(sanitizeAIHtml(data.text));
+        outputEl.appendChild(result);
+      } else if(response.status === 429){
+        aiMessage("ai-warn", "You have reached the hourly limit for AI analysis. Please try again later.",
+                             "وصلت إلى الحد المسموح من التحليلات خلال الساعة. حاول مرة أخرى لاحقاً.");
+      } else if(response.status === 503){
+        aiMessage("ai-warn", "AI analysis is temporarily unavailable. The compatibility results above are still valid.",
+                             "التحليل بالذكاء الاصطناعي غير متاح مؤقتاً. نتائج التوافق أعلاه ما زالت صحيحة.");
       } else {
-        outputEl.innerHTML = '<div class="ai-result"><p class="ai-err">' +
-          tx("Could not get AI analysis. Please try again.",
-             "تعذّر الحصول على تحليل AI. حاول مرة أخرى.") + '</p></div>';
+        aiMessage("ai-err", "Could not get AI analysis. Please try again.",
+                            "تعذّر الحصول على تحليل AI. حاول مرة أخرى.");
       }
     } catch(err){
-      outputEl.innerHTML = '<div class="ai-result"><p class="ai-err">' +
-        tx("Connection error. Please check your network and try again.",
-           "خطأ في الاتصال. تحقق من الشبكة وحاول مرة أخرى.") + '</p></div>';
+      aiMessage("ai-err", "Connection error. Please check your network and try again.",
+                          "خطأ في الاتصال. تحقق من الشبكة وحاول مرة أخرى.");
       console.error("AI Analysis error:", err);
     }
 
